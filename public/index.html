@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Food Identity</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0a0d14;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────── */
+    header {
+      flex-shrink: 0;
+      padding: 0.85rem 2rem;
+      text-align: center;
+      background: #0f1117;
+      border-bottom: 1px solid #1e293b;
+      position: relative;
+    }
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #f97316 0%, #f59e0b 45%, #84cc16 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+    header p {
+      color: #475569;
+      font-size: 0.8rem;
+      margin-top: 0.2rem;
+    }
+    .qr-btn {
+      position: absolute;
+      right: 1.2rem; top: 50%; transform: translateY(-50%);
+      background: none; border: 1px solid #334155;
+      color: #64748b; border-radius: 8px;
+      padding: .3rem .7rem; font-size: .75rem;
+      cursor: pointer; display: flex; align-items: center; gap: .35rem;
+      transition: color .15s, border-color .15s;
+    }
+    .qr-btn:hover { color: #f97316; border-color: #f97316; }
+
+    /* QR modal */
+    .qr-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.75);
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(5px);
+    }
+    .qr-modal {
+      background: #0f1117;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 1.75rem 2rem;
+      text-align: center;
+      max-width: 300px; width: 90%;
+    }
+    .qr-modal h3 { font-size: 1rem; font-weight: 700; color: #f1f5f9; margin-bottom: .3rem; }
+    .qr-modal p  { font-size: .75rem; color: #64748b; margin-bottom: 1rem; line-height: 1.5; }
+    .qr-modal .qr-url {
+      font-size: .7rem; color: #f97316;
+      word-break: break-all; margin-bottom: 1.1rem;
+    }
+    #qrCanvas { display: flex; justify-content: center; margin-bottom: 1.1rem; }
+    #qrCanvas canvas, #qrCanvas img { border-radius: 8px; }
+    .qr-close {
+      background: none; border: 1px solid #334155; color: #64748b;
+      padding: .4rem 1.1rem; border-radius: 8px; font-size: .78rem;
+      cursor: pointer; transition: color .15s, border-color .15s;
+    }
+    .qr-close:hover { color: #f1f5f9; border-color: #475569; }
+
+    /* ── Main 2-panel ───────────────────────── */
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── LEFT PANEL ─────────────────────────── */
+    .panel-left {
+      width: 42%;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem;
+      gap: 1rem;
+      overflow: hidden;
+      border-right: 1px solid #1e293b;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      flex-shrink: 0;
+      border: 2px dashed #334155;
+      border-radius: 14px;
+      padding: 1.6rem 1.2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      background: #1e293b;
+      position: relative;
+    }
+    .drop-zone.dragover {
+      border-color: #f97316;
+      background: rgba(249,115,22,.06);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+      width: 100%; height: 100%;
+    }
+    .dz-icon  { font-size: 2.2rem; margin-bottom: .4rem; }
+    .dz-label { font-size: .9rem; color: #cbd5e1; }
+    .dz-sub   { font-size: .72rem; color: #475569; margin-top: .3rem; }
+
+    /* Count bar */
+    .count-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .count-bar span { font-size: .78rem; color: #64748b; }
+    .clear-btn {
+      background: none;
+      border: 1px solid #334155;
+      color: #64748b;
+      font-size: .72rem;
+      padding: .2rem .65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .clear-btn:hover { color: #ef4444; border-color: #ef4444; }
+
+    /* Image list */
+    .image-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: .65rem;
+      padding-right: 2px;
+    }
+    .image-list::-webkit-scrollbar { width: 4px; }
+    .image-list::-webkit-scrollbar-track { background: transparent; }
+    .image-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+    .image-item {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: .7rem;
+      background: #1e293b;
+      border: 1px solid #2d3f55;
+      border-radius: 11px;
+      padding: .65rem .8rem;
+      transition: border-color .25s, opacity .25s;
+    }
+    .image-item.analyzing { border-color: #f97316; animation: pulse 1.5s ease-in-out infinite; }
+    .image-item.done      { border-color: #22c55e55; }
+    .image-item.error     { border-color: #ef4444; opacity: .8; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.65} }
+
+    .item-thumb {
+      width: 52px; height: 52px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #0f1117;
+    }
+    .item-info { flex: 1; min-width: 0; }
+    .item-name {
+      font-size: .88rem; font-weight: 600; color: #f1f5f9;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .item-sub  { font-size: .72rem; color: #64748b; margin-top: .15rem; }
+    .item-badges { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .3rem; }
+
+    .badge {
+      font-size: .62rem; padding: .12rem .45rem; border-radius: 999px;
+      font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .badge.cat  { background: #1d3a7a; color: #93c5fd; }
+    .badge.cui  { background: #4c1d95; color: #c4b5fd; }
+    .badge.cal  { background: #134e4a; color: #6ee7b7; }
+
+    .item-idx {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: #334155;
+      color: #94a3b8;
+      font-size: .68rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .item-remove {
+      background: none; border: none; color: #475569;
+      cursor: pointer; font-size: .9rem; flex-shrink: 0;
+      padding: .2rem; border-radius: 4px; transition: color .15s;
+    }
+    .item-remove:hover { color: #ef4444; }
+
+    .item-expand {
+      background: none; border: 1px solid #334155; color: #64748b;
+      cursor: pointer; font-size: .75rem; flex-shrink: 0;
+      padding: .18rem .4rem; border-radius: 5px; transition: color .15s, border-color .15s;
+      line-height: 1;
+    }
+    .item-expand:hover       { color: #f97316; border-color: #f97316; }
+    .item-expand.active      { color: #f97316; border-color: #f97316; background: rgba(249,115,22,.08); }
+
+    /* ── Grid detail (expands inside the card) ── */
+    .item-detail {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      gap: .65rem;
+      padding-top: .5rem;
+      border-top: 1px solid #334155;
+    }
+    .item-detail.open { display: flex; }
+
+    .grid-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0f1117;
+    }
+    .grid-img {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+    .grid-overlay {
+      position: absolute; inset: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows:    repeat(4, 1fr);
+    }
+    .grid-cell {
+      display: flex; align-items: center; justify-content: center;
+      font-size: .9rem;
+      border: 1px solid rgba(255,255,255,.06);
+      transition: opacity .2s;
+      cursor: default;
+    }
+    .grid-cell:hover { opacity: .6; }
+
+    /* Percentage bars */
+    .pct-bars { display: flex; flex-direction: column; gap: .35rem; }
+    .pct-row  { display: flex; align-items: center; gap: .5rem; font-size: .7rem; }
+    .pct-label { width: 78px; color: #94a3b8; flex-shrink: 0; white-space: nowrap; }
+    .pct-track { flex: 1; height: 5px; background: #0f1117; border-radius: 3px; overflow: hidden; }
+    .pct-fill  { height: 100%; border-radius: 3px; transition: width .6s ease; }
+    .pct-val   { width: 30px; text-align: right; color: #475569; flex-shrink: 0; }
+
+    /* ── DIVIDER ─────────────────────────────── */
+    .divider { width: 1px; background: #1e293b; flex-shrink: 0; }
+
+    /* ── RIGHT PANEL ────────────────────────── */
+    .panel-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .chain-topbar {
+      flex-shrink: 0;
+      padding: .6rem 1.2rem;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    .chain-topbar .chain-title {
+      font-size: .75rem;
+      font-weight: 600;
+      color: #64748b;
+      flex: 1;
+    }
+
+    /* Legend */
+    .legend { display: flex; gap: 1rem; flex-shrink: 0; }
+    .legend-item { display: flex; align-items: center; gap: .35rem; font-size: .68rem; color: #475569; }
+    .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Chart section */
+    .chart-section {
+      flex-shrink: 0;
+      height: 160px;
+      border-top: 1px solid #1e293b;
+      padding: .6rem 1.25rem .7rem;
+      display: flex;
+      flex-direction: column;
+      gap: .3rem;
+    }
+    .chart-title {
+      font-size: .63rem;
+      font-weight: 700;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      flex-shrink: 0;
+    }
+    #barChartSvg { flex: 1; overflow: visible; }
+
+    /* Action buttons group (screenshot + zip) */
+    .action-btns {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      z-index: 20;
+      display: flex;
+      gap: .4rem;
+    }
+    .action-btn {
+      width: 36px; height: 36px;
+      background: rgba(15,17,23,.88);
+      border: 1px solid #334155;
+      border-radius: 9px;
+      color: #64748b;
+      font-size: 1.05rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: color .15s, border-color .15s, background .15s;
+      position: relative;
+    }
+    .action-btn:hover { color: #f97316; border-color: #f97316; background: rgba(249,115,22,.08); }
+    .action-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .action-btn .btn-spin {
+      animation: spin .7s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Mobile layout ──────────────────────────── */
+    @media (max-width: 640px) {
+      body { overflow: auto; height: auto; }
+
+      header { padding: .6rem 1rem; }
+      header h1 { font-size: 1.2rem; }
+      header p  { display: none; }
+      .qr-btn   { display: none; }
+
+      main {
+        flex-direction: column;
+        overflow: visible;
+        height: auto;
+      }
+
+      .panel-left {
+        width: 100%;
+        min-width: unset;
+        border-right: none;
+        border-bottom: 1px solid #1e293b;
+        padding: .9rem;
+        overflow: visible;
+      }
+
+      /* Compact drop zone */
+      .drop-zone { padding: .9rem; }
+      .dz-icon   { font-size: 1.6rem; margin-bottom: .2rem; }
+      .dz-label  { font-size: .82rem; }
+      .dz-sub    { font-size: .65rem; }
+
+      /* Image list: fixed height so it scrolls */
+      .image-list { max-height: 260px; overflow-y: auto; }
+
+      .panel-right {
+        width: 100%;
+        flex-shrink: 0;
+      }
+
+      /* Chart section shorter on mobile */
+      .chart-section { padding: .6rem .9rem; }
+
+      /* Action buttons */
+      .action-btns { bottom: 10px; right: 10px; }
+      .action-btn  { width: 32px; height: 32px; font-size: .9rem; }
+    }
+
+    /* Memory warning modal */
+    .mem-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.72);
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(5px);
+    }
+    .mem-modal {
+      background: #0f1117;
+      border: 1px solid #ef4444;
+      border-radius: 16px;
+      padding: 1.75rem 2rem;
+      max-width: 360px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(239,68,68,.25);
+    }
+    .mem-icon  { font-size: 2.4rem; margin-bottom: .6rem; }
+    .mem-modal h3 { font-size: 1.05rem; font-weight: 800; color: #f1f5f9; margin-bottom: .4rem; }
+    .mem-usage {
+      font-size: 1.6rem; font-weight: 800; margin: .5rem 0 .9rem;
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .mem-modal p { font-size: .8rem; color: #64748b; line-height: 1.65; margin-bottom: 1.25rem; }
+    .mem-modal p strong { color: #94a3b8; }
+    .mem-btns { display: flex; gap: .65rem; justify-content: center; }
+    .mem-btn-clear {
+      background: #ef4444; color: #fff; border: none;
+      padding: .55rem 1.15rem; border-radius: 8px;
+      font-size: .8rem; font-weight: 700; cursor: pointer;
+      transition: background .15s;
+    }
+    .mem-btn-clear:hover { background: #dc2626; }
+    .mem-btn-dismiss {
+      background: none; color: #64748b; border: 1px solid #334155;
+      padding: .55rem 1.15rem; border-radius: 8px;
+      font-size: .8rem; font-weight: 600; cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .mem-btn-dismiss:hover { color: #94a3b8; border-color: #475569; }
+
+    /* Canvas wrap */
+    .chain-canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .chain-canvas-wrap.scrollable {
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      cursor: grab;
+      scroll-behavior: smooth;
+    }
+    .chain-canvas-wrap.scrollable:active { cursor: grabbing; }
+    .chain-canvas-wrap.scrollable::-webkit-scrollbar { height: 3px; }
+    .chain-canvas-wrap.scrollable::-webkit-scrollbar-track { background: transparent; }
+    .chain-canvas-wrap.scrollable::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+    /* Fade hint on right edge when scrollable */
+    .chain-canvas-wrap.scrollable::after {
+      content: '';
+      position: absolute; top: 0; right: 0;
+      width: 40px; height: 100%;
+      background: linear-gradient(to right, transparent, #0a0d14);
+      pointer-events: none;
+    }
+    #chainSvg { width: 100%; height: 100%; }
+
+    @media (max-width: 640px) {
+      .chain-canvas-wrap { height: 420px; flex: none; }
+    }
+
+    /* Empty state */
+    .empty-chain {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: .65rem; pointer-events: none;
+    }
+    .ec-icon { font-size: 3.5rem; opacity: .18; }
+    .ec-text { font-size: .85rem; color: #334155; text-align: center; line-height: 1.6; }
+    .ec-count {
+      font-size: 2rem; font-weight: 800;
+      background: linear-gradient(135deg,#f97316,#f59e0b);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header (title centred at top) ── -->
+<header>
+  <h1>🍽 The Food Identity</h1>
+  <p>Drag &amp; drop food photos on the left — similar foods are linked on the right</p>
+  <button class="qr-btn" id="qrBtn">📱 Open on phone</button>
+</header>
+
+<!-- QR modal -->
+<div class="qr-overlay" id="qrOverlay" style="display:none">
+  <div class="qr-modal">
+    <h3>Open on your phone</h3>
+    <p>Make sure your phone is on the<br>same Wi-Fi, then scan:</p>
+    <div id="qrCanvas"></div>
+    <div class="qr-url" id="qrUrl"></div>
+    <button class="qr-close" id="qrClose">Close</button>
+  </div>
+</div>
+
+<main>
+
+  <!-- ── LEFT PANEL ── -->
+  <div class="panel-left">
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="image/*" multiple />
+      <div class="dz-icon">📷</div>
+      <div class="dz-label">Drag &amp; drop food images here</div>
+      <div class="dz-sub">or click to browse · multiple files at once · JPEG PNG GIF WebP · max 10 MB each</div>
+    </div>
+
+    <div class="count-bar" id="countBar" style="display:none">
+      <span id="countLabel">0 images</span>
+      <button class="clear-btn" id="clearBtn">Clear all</button>
+    </div>
+
+    <div class="image-list" id="imageList"></div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="panel-right">
+
+    <div class="chain-topbar">
+      <span class="chain-title" id="chainHint">Upload 3+ food images to see the similarity chain</span>
+      <div class="legend" id="legend" style="display:none">
+        <div class="legend-item"><div class="leg-dot" style="background:#f97316"></div><span>Category</span></div>
+        <div class="legend-item"><div class="leg-dot" style="background:#a855f7"></div><span>Cuisine</span></div>
+        <div class="legend-item"><div class="leg-dot" style="background:#64748b"></div><span>Color</span></div>
+        <div class="legend-item"><div class="leg-dot" style="background:#3b82f6"></div><span>Ingredient</span></div>
+      </div>
+    </div>
+
+    <div class="chain-canvas-wrap">
+      <svg id="chainSvg"></svg>
+      <div class="empty-chain" id="emptyChain">
+        <div class="ec-icon">🔗</div>
+        <div id="ecNeed" class="ec-count"></div>
+        <div class="ec-text">Upload a food photo<br>to see its flavor graph</div>
+      </div>
+    </div>
+
+    <div class="chart-section" id="chartSection" style="display:none">
+      <div class="chart-title">Overall Food Breakdown</div>
+      <svg id="barChartSvg"></svg>
+    </div>
+
+    <div class="action-btns">
+      <button class="action-btn" id="zipBtn" title="Download all images as ZIP">🗜️</button>
+      <button class="action-btn" id="screenshotBtn" title="Save graph as image">📸</button>
+    </div>
+
+  </div>
+</main>
+
+<!-- Memory warning modal -->
+<div class="mem-overlay" id="memOverlay" style="display:none">
+  <div class="mem-modal">
+    <div class="mem-icon">⚠️</div>
+    <h3>Memory Getting Full</h3>
+    <div class="mem-usage" id="memUsage"></div>
+    <p>You have <strong id="memCount"></strong> images loaded in memory.<br>
+    Clearing them will keep the app running smoothly.</p>
+    <div class="mem-btns">
+      <button class="mem-btn-clear" id="memClearBtn">Clear All Images</button>
+      <button class="mem-btn-dismiss" id="memDismissBtn">Keep Going</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ───────────────────────────────────────────────────
+  let nextId = 0;
+  const foods = []; // { id, file, dataUrl, analysis, status }
+
+  // ── DOM refs ────────────────────────────────────────────────
+  const dropZone  = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const imageList = document.getElementById('imageList');
+  const countBar  = document.getElementById('countBar');
+  const countLbl  = document.getElementById('countLabel');
+  const clearBtn  = document.getElementById('clearBtn');
+  const chainSvg  = document.getElementById('chainSvg');
+  const emptyChain= document.getElementById('emptyChain');
+  const ecNeed    = document.getElementById('ecNeed');
+  const chainHint = document.getElementById('chainHint');
+  const legend    = document.getElementById('legend');
+
+  // ── Drag & Drop ─────────────────────────────────────────────
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    handleFiles([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener('change', () => {
+    handleFiles([...fileInput.files]);
+    fileInput.value = '';
+  });
+  clearBtn.addEventListener('click', () => {
+    foods.length = 0;
+    imageList.innerHTML = '';
+    refreshUI();
+    updateChain();
+  });
+
+  // ── QR Code ───────────────────────────────────────────────────
+  document.getElementById('qrBtn').addEventListener('click', () => {
+    const url = window.location.href;
+    document.getElementById('qrUrl').textContent = url;
+    const container = document.getElementById('qrCanvas');
+    container.innerHTML = '';
+    new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#f1f5f9', colorLight: '#0f1117' });
+    document.getElementById('qrOverlay').style.display = 'flex';
+  });
+  document.getElementById('qrClose').addEventListener('click', () => {
+    document.getElementById('qrOverlay').style.display = 'none';
+  });
+  document.getElementById('qrOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+  });
+
+  // ── Memory check ──────────────────────────────────────────────
+  const MEM_WARN_IMAGES = 20;
+
+  function estimatedMemMB() {
+    const bytes = foods.reduce((sum, f) => sum + Math.round((f.dataUrl?.length || 0) * 0.75), 0);
+    return (bytes / (1024 * 1024)).toFixed(1);
+  }
+
+  function checkMemory() {
+    if (foods.length < MEM_WARN_IMAGES) return;
+    const mb = estimatedMemMB();
+    document.getElementById('memUsage').textContent  = `${mb} MB`;
+    document.getElementById('memCount').textContent  = `${foods.length} images (~${mb} MB)`;
+    document.getElementById('memOverlay').style.display = 'flex';
+  }
+
+  function clearAllImages() {
+    foods.length = 0;
+    imageList.innerHTML = '';
+    refreshUI();
+    updateChain();
+    document.getElementById('memOverlay').style.display = 'none';
+  }
+
+  document.getElementById('memClearBtn').addEventListener('click', clearAllImages);
+  document.getElementById('memDismissBtn').addEventListener('click', () => {
+    document.getElementById('memOverlay').style.display = 'none';
+  });
+
+  // ── Image compression ────────────────────────────────────────
+  // Resizes and JPEG-compresses an image to ~20-30 KB using canvas.
+  function compressImage(file, targetKB = 25) {
+    return new Promise(resolve => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        const MAX = 800;
+        let { width: w, height: h } = img;
+        if (w > MAX || h > MAX) {
+          if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+          else        { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+        // Binary-search for the quality level that lands near targetKB
+        const targetBytes = targetKB * 1024;
+        let lo = 0.05, hi = 0.92, q = 0.5, dataUrl;
+        for (let i = 0; i < 8; i++) {
+          dataUrl = canvas.toDataURL('image/jpeg', q);
+          const size = Math.round((dataUrl.length - 'data:image/jpeg;base64,'.length) * 3 / 4);
+          if (Math.abs(size - targetBytes) < 2048) break;
+          if (size > targetBytes) hi = q; else lo = q;
+          q = (lo + hi) / 2;
+        }
+        canvas.toBlob(blob => resolve({ dataUrl, blob }), 'image/jpeg', q);
+      };
+      img.src = url;
+    });
+  }
+
+  // ── File handling ───────────────────────────────────────────
+  function handleFiles(files) {
+    files.filter(f => f.type.startsWith('image/')).forEach(async file => {
+      const id   = nextId++;
+      const item = { id, file, dataUrl: null, analysis: null, status: 'analyzing' };
+      foods.push(item);
+      checkMemory();
+
+      // Show placeholder card immediately
+      item.dataUrl = await new Promise(res => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.readAsDataURL(file);
+      });
+      addListItem(item);
+      refreshUI();
+
+      // Compress, then swap in the smaller blob for upload
+      const { dataUrl, blob } = await compressImage(file);
+      item.dataUrl = dataUrl;
+      item.file    = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      const thumb  = document.querySelector(`#item-${id} .item-thumb`);
+      if (thumb) thumb.src = dataUrl;
+
+      identify(item);
+    });
+  }
+
+  function refreshUI() {
+    const n = foods.length;
+    countBar.style.display = n ? 'flex' : 'none';
+    countLbl.textContent = `${n} image${n !== 1 ? 's' : ''}`;
+  }
+
+  // ── Category config ─────────────────────────────────────────
+  const CAT = {
+    noodles:    { color: 'rgba(245,158,11,.45)',  solid: '#f59e0b', emoji: '🍜' },
+    rice:       { color: 'rgba(203,213,225,.35)', solid: '#94a3b8', emoji: '🍚' },
+    meat:       { color: 'rgba(239,68,68,.45)',   solid: '#ef4444', emoji: '🥩' },
+    bread:      { color: 'rgba(217,119,6,.45)',   solid: '#d97706', emoji: '🍞' },
+    fish:       { color: 'rgba(59,130,246,.45)',  solid: '#3b82f6', emoji: '🐟' },
+    vegetables: { color: 'rgba(34,197,94,.45)',   solid: '#22c55e', emoji: '🥦' },
+    other:      { color: 'rgba(71,85,105,.25)',   solid: '#475569', emoji: '·'  },
+  };
+
+  // ── List item ───────────────────────────────────────────────
+  function addListItem(item) {
+    const el = document.createElement('div');
+    el.className = 'image-item analyzing';
+    el.id = `item-${item.id}`;
+    const idx = foods.indexOf(item) + 1;
+    el.innerHTML = `
+      <div class="item-idx">${idx}</div>
+      <img class="item-thumb" src="${item.dataUrl}" alt="" />
+      <div class="item-info">
+        <div class="item-name">${item.file.name}</div>
+        <div class="item-sub">Analyzing…</div>
+        <div class="item-badges"></div>
+      </div>
+      <button class="item-expand" id="expand-${item.id}" onclick="toggleExpand(${item.id})" title="Show grid analysis">⊞</button>
+      <button class="item-remove" onclick="removeItem(${item.id})" title="Remove">✕</button>
+      <div class="item-detail" id="detail-${item.id}"></div>`;
+    imageList.appendChild(el);
+  }
+
+  function updateListItem(item) {
+    const el = document.getElementById(`item-${item.id}`);
+    if (!el) return;
+    el.className = `image-item ${item.status}`;
+
+    if (item.status === 'done' && item.analysis) {
+      const food = item.analysis.foods?.[0];
+      el.querySelector('.item-name').textContent = food?.name || 'Unknown food';
+      el.querySelector('.item-sub').textContent  =
+        (item.analysis.confidence ? item.analysis.confidence + ' confidence' : '') +
+        (food?.calories_per_serving ? ' · ' + food.calories_per_serving : '');
+
+      const badgesEl = el.querySelector('.item-badges');
+      badgesEl.innerHTML = '';
+      if (food?.category) badgesEl.insertAdjacentHTML('beforeend', `<span class="badge cat">${food.category}</span>`);
+      if (food?.cuisine)  badgesEl.insertAdjacentHTML('beforeend', `<span class="badge cui">${food.cuisine}</span>`);
+
+      renderGrid(item); // populate detail panel (hidden until toggled)
+    } else if (item.status === 'error') {
+      el.querySelector('.item-sub').textContent = '⚠ Failed to identify';
+      el.querySelector('.item-sub').style.color = '#ef4444';
+    }
+  }
+
+  // ── Grid toggle ─────────────────────────────────────────────
+  function toggleExpand(id) {
+    const detail = document.getElementById(`detail-${id}`);
+    const btn    = document.getElementById(`expand-${id}`);
+    if (!detail) return;
+    const open = detail.classList.toggle('open');
+    btn.classList.toggle('active', open);
+  }
+
+  // ── Grid render ─────────────────────────────────────────────
+  function renderGrid(item) {
+    const detail = document.getElementById(`detail-${item.id}`);
+    if (!detail) return;
+    const grid = item.analysis?.grid;
+    const pct  = item.analysis?.category_pct;
+
+    if (!grid || !Array.isArray(grid)) {
+      detail.innerHTML = `<div style="font-size:.75rem;color:#475569;padding:.25rem 0">Grid data unavailable</div>`;
+      return;
+    }
+
+    // 4×4 image + overlay
+    const cells = grid.flat().map(cat => {
+      const c = CAT[cat] || CAT.other;
+      return `<div class="grid-cell" style="background:${c.color}" title="${cat}">${c.emoji}</div>`;
+    }).join('');
+
+    // Percentage bars (only categories > 0%)
+    const bars = Object.entries(pct || {})
+      .filter(([, v]) => v > 0)
+      .sort(([, a], [, b]) => b - a)
+      .map(([cat, v]) => {
+        const c = CAT[cat] || CAT.other;
+        return `<div class="pct-row">
+          <span class="pct-label">${c.emoji} ${cat}</span>
+          <div class="pct-track"><div class="pct-fill" style="width:${v}%;background:${c.solid}"></div></div>
+          <span class="pct-val">${v}%</span>
+        </div>`;
+      }).join('');
+
+    detail.innerHTML = `
+      <div class="grid-wrap">
+        <img class="grid-img" src="${item.dataUrl}" alt="" />
+        <div class="grid-overlay">${cells}</div>
+      </div>
+      ${bars ? `<div class="pct-bars">${bars}</div>` : ''}`;
+  }
+
+  function removeItem(id) {
+    const idx = foods.findIndex(f => f.id === id);
+    if (idx !== -1) foods.splice(idx, 1);
+    document.getElementById(`item-${id}`)?.remove();
+    // renumber
+    foods.forEach((f, i) => {
+      const el = document.getElementById(`item-${f.id}`);
+      if (el) el.querySelector('.item-idx').textContent = i + 1;
+    });
+    refreshUI();
+    updateChain();
+  }
+
+  // ── Color-based category fallback ───────────────────────────
+  // Maps average RGB of a grid cell → food category using HSL rules:
+  //   red/dark-red  → meat        (user rule: red = meat)
+  //   green         → vegetables  (user rule: green = vegetable)
+  //   white/cream   → rice        (user rule: white = rice or noodle)
+  //   golden/yellow → noodles
+  //   brown/dark    → bread
+  //   blue          → fish
+  function rgbToCategory(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    const l = (max + min) / 2;
+    const s = d === 0 ? 0 : d / (l > 0.5 ? 2 - max - min : max + min);
+    let h = 0;
+    if (d !== 0) {
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    h *= 360; const sp = s * 100, lp = l * 100;
+
+    if (lp > 82 && sp < 25)                          return 'rice';        // white
+    if (lp < 14)                                      return 'other';       // black/shadow
+    if (h >= 62 && h <= 168 && sp > 18)               return 'vegetables';  // green
+    if (h > 168 && h <= 265 && sp > 18)               return 'fish';        // blue
+    if ((h <= 18 || h >= 338) && sp > 22 && lp < 78) return 'meat';        // red
+    if (h > 18 && h <= 54 && sp > 28)                 return 'noodles';     // yellow/golden
+    if (h > 18 && h <= 50 && lp < 48)                 return 'bread';       // dark brown
+    return 'other';
+  }
+
+  function analyzeByColor(dataUrl) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const SZ = 160, CELLS = 4, CS = SZ / CELLS;
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = SZ;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, SZ, SZ);
+
+        const grid = [], counts = { noodles:0, rice:0, meat:0, bread:0, fish:0, vegetables:0, other:0 };
+        for (let row = 0; row < CELLS; row++) {
+          const rowArr = [];
+          for (let col = 0; col < CELLS; col++) {
+            const px = ctx.getImageData(col * CS, row * CS, CS, CS).data;
+            let r = 0, g = 0, b = 0;
+            for (let i = 0; i < px.length; i += 4) { r += px[i]; g += px[i+1]; b += px[i+2]; }
+            const n = px.length / 4;
+            const cat = rgbToCategory(r / n, g / n, b / n);
+            rowArr.push(cat);
+            counts[cat]++;
+          }
+          grid.push(rowArr);
+        }
+
+        const total = CELLS * CELLS;
+        const category_pct = Object.fromEntries(
+          Object.entries(counts).map(([k, v]) => [k, Math.round(v * 100 / total)])
+        );
+        // Fix rounding so values sum to 100
+        const diff = 100 - Object.values(category_pct).reduce((a, b) => a + b, 0);
+        const biggest = Object.entries(category_pct).sort(([,a],[,b]) => b - a)[0][0];
+        category_pct[biggest] += diff;
+
+        resolve({ grid, category_pct });
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  // ── API call ────────────────────────────────────────────────
+  async function identify(item) {
+    const form = new FormData();
+    form.append('image', item.file);
+    try {
+      const res  = await fetch('/identify', { method: 'POST', body: form });
+      const data = await res.json();
+      item.analysis = data;
+      item.status   = data.error ? 'error' : 'done';
+    } catch {
+      item.status = 'error';
+    }
+
+    // Fallback: if API failed, still produce a color-based grid
+    if (item.status === 'error' && item.dataUrl) {
+      const { grid, category_pct } = await analyzeByColor(item.dataUrl);
+      item.analysis = { ...(item.analysis || {}), grid, category_pct };
+    }
+
+    updateListItem(item);
+    updateChain();
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function svgEl(tag, attrs = {}) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+    return el;
+  }
+
+  const COLOR_MAP = {
+    red:'#ef4444', orange:'#f97316', yellow:'#eab308', green:'#22c55e',
+    blue:'#3b82f6', purple:'#a855f7', pink:'#ec4899', white:'#f8fafc',
+    black:'#1e293b', brown:'#92400e', 'golden-brown':'#b45309', golden:'#d97706',
+    cream:'#fef3c7', 'dark-brown':'#451a03', gray:'#6b7280', grey:'#6b7280',
+    beige:'#d6b99a', tan:'#c9a87c', olive:'#84844e', teal:'#14b8a6',
+    cyan:'#06b6d4', lime:'#84cc16', maroon:'#7f1d1d', navy:'#1e3a5f',
+    ivory:'#f5f0e0', lavender:'#c4b5fd', salmon:'#fca5a5', coral:'#fb923c',
+    peach:'#fcd5a0', magenta:'#e879f9', violet:'#8b5cf6', indigo:'#6366f1',
+    turquoise:'#2dd4bf', crimson:'#dc2626', scarlet:'#ef4444',
+  };
+  // Keyword-based fallback: find the first COLOR_MAP key that appears in the name
+  const COLOR_KEYWORDS = Object.keys(COLOR_MAP).sort((a, b) => b.length - a.length);
+  function cssColor(name) {
+    const key = name?.toLowerCase().trim() || '';
+    if (COLOR_MAP[key]) return COLOR_MAP[key];
+    const match = COLOR_KEYWORDS.find(k => key.includes(k));
+    return match ? COLOR_MAP[match] : '#94a3b8';
+  }
+
+  // ── Characteristic graph ──────────────────────────────────────
+  function buildCharGraph(doneItems) {
+    const charMap = new Map();
+    const edges   = [];
+    doneItems.forEach(item => {
+      const food = item.analysis?.foods?.[0];
+      if (!food) return;
+      const add = (type, label) => {
+        if (!label) return;
+        const key = `${type}:${String(label).toLowerCase().trim()}`;
+        if (!charMap.has(key)) charMap.set(key, { type, id: key, label: String(label).trim() });
+        edges.push({ from: `food_${item.id}`, to: key });
+      };
+      (food.dominant_colors  || []).forEach(c => add('color', c));
+      (food.key_ingredients  || []).slice(0, 5).forEach(i => add('ingredient', i));
+      if (food.category) add('category', food.category);
+      if (food.cuisine)  add('cuisine',  food.cuisine);
+    });
+    return { charNodes: [...charMap.values()], edges };
+  }
+
+  function charTypeColor(type) {
+    return { category: '#f97316', cuisine: '#a855f7', color: '#64748b', ingredient: '#3b82f6' }[type] || '#64748b';
+  }
+
+  function countSharedChars(done) {
+    if (done.length < 2) return 0;
+    const { charNodes, edges } = buildCharGraph(done);
+    return charNodes.filter(cn => edges.filter(e => e.to === cn.id).length > 1).length;
+  }
+
+  // ── Characteristic node layout ────────────────────────────────
+  function layoutCharNodes(charNodes, edges, foodPos, W, H, foodY, RF) {
+    const charPos  = new Map();
+    const ORDER    = ['category', 'cuisine', 'color', 'ingredient'];
+    const types    = ORDER.filter(t => charNodes.some(cn => cn.type === t));
+    if (!types.length) return charPos;
+
+    const topY    = foodY + RF + 40;
+    const bottomY = H - 18;
+    const rowH    = types.length > 1 ? (bottomY - topY) / (types.length - 1) : 0;
+
+    types.forEach((type, ti) => {
+      const y     = types.length === 1 ? (topY + bottomY) / 2 : topY + ti * rowH;
+      const nodes = charNodes.filter(cn => cn.type === type);
+
+      nodes.forEach(cn => {
+        const xs = edges.filter(e => e.to === cn.id)
+          .map(e => foodPos.get(e.from)?.x).filter(x => x != null);
+        cn._idealX = xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : W / 2;
+        cn._shared = edges.filter(e => e.to === cn.id).length > 1;
+      });
+      nodes.sort((a, b) => a._idealX - b._idealX);
+
+      const minGap   = 74;
+      const total    = (nodes.length - 1) * minGap;
+      const avgIdeal = nodes.reduce((s, n) => s + n._idealX, 0) / nodes.length;
+      let startX     = Math.max(36, Math.min(W - 36 - total, avgIdeal - total / 2));
+      nodes.forEach((cn, i) => charPos.set(cn.id, { x: startX + i * minGap, y }));
+    });
+    return charPos;
+  }
+
+  // ── SVG chain draw ────────────────────────────────────────────
+  function updateChain() {
+    const visible = foods.filter(f => f.dataUrl);
+    const done    = visible.filter(f => f.status === 'done' && f.analysis && !f.analysis.error);
+    const need    = Math.max(0, 1 - visible.length);
+
+    // Topbar
+    if (visible.length < 1) {
+      chainHint.textContent = 'Upload a food image to see the flavor graph';
+      legend.style.display  = 'none';
+    } else {
+      const shared = countSharedChars(done);
+      chainHint.textContent = `${visible.length} food${visible.length !== 1 ? 's' : ''} · ${shared} shared characteristic${shared !== 1 ? 's' : ''}`;
+      legend.style.display  = done.length >= 1 ? 'flex' : 'none';
+    }
+
+    // Empty state
+    emptyChain.style.display = visible.length < 1 ? 'flex' : 'none';
+    ecNeed.textContent = need > 0 ? `+${need}` : '';
+
+    chainSvg.innerHTML = '';
+    updateBarChart(done);
+    if (visible.length < 1) return;
+
+    const wrap       = chainSvg.parentElement;
+    const containerW = wrap.clientWidth  || wrap.getBoundingClientRect().width;
+    const H          = chainSvg.clientHeight || chainSvg.getBoundingClientRect().height;
+    if (!containerW || !H) { setTimeout(updateChain, 80); return; }
+
+    // Expand canvas horizontally when > 4 foods so nodes keep proper spacing
+    const MIN_SPACING = 140;
+    const neededW = visible.length > 1 ? (visible.length - 1) * MIN_SPACING + 120 : containerW;
+    const W       = visible.length > 4  ? Math.max(containerW, neededW) : containerW;
+
+    if (W > containerW) {
+      chainSvg.style.width  = W + 'px';
+      chainSvg.style.minWidth = W + 'px';
+      wrap.classList.add('scrollable');
+    } else {
+      chainSvg.style.width  = '100%';
+      chainSvg.style.minWidth = '';
+      wrap.classList.remove('scrollable');
+    }
+
+    // ── Food node positions (horizontal row at top)
+    const RF       = Math.min(38, W / Math.max(visible.length * 2.8, 3));
+    const foodY    = Math.max(RF + 20, H * 0.17);
+    const fSpacing = visible.length > 1 ? Math.min((W - (RF + 16) * 2) / (visible.length - 1), 170) : 0;
+    const fStartX  = visible.length > 1 ? W / 2 - fSpacing * (visible.length - 1) / 2 : W / 2;
+
+    const foodPos = new Map();
+    visible.forEach((item, i) => {
+      foodPos.set(`food_${item.id}`, {
+        x: visible.length === 1 ? W / 2 : fStartX + i * fSpacing,
+        y: foodY
+      });
+    });
+
+    // ── Build & layout characteristic graph
+    const { charNodes, edges } = buildCharGraph(done);
+    const charPos = layoutCharNodes(charNodes, edges, foodPos, W, H, foodY, RF);
+
+    // ── defs
+    const defs = svgEl('defs');
+    const filt = svgEl('filter', { id: 'glow', x: '-30%', y: '-30%', width: '160%', height: '160%' });
+    filt.innerHTML = `<feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>`;
+    defs.appendChild(filt);
+    visible.forEach((item, i) => {
+      const p = foodPos.get(`food_${item.id}`);
+      const cp = svgEl('clipPath', { id: `cp${i}` });
+      cp.appendChild(svgEl('circle', { cx: p.x, cy: p.y, r: RF }));
+      defs.appendChild(cp);
+    });
+    chainSvg.appendChild(defs);
+
+    // ── Draw edges (food → characteristic)
+    edges.forEach(({ from, to }) => {
+      const fp = foodPos.get(from);
+      const cp = charPos.get(to);
+      if (!fp || !cp) return;
+      const cn    = charNodes.find(n => n.id === to);
+      const color = charTypeColor(cn?.type);
+      const times = edges.filter(e => e.to === to).length;
+      const len   = Math.hypot(cp.x - fp.x, cp.y - fp.y);
+      const line  = svgEl('line', {
+        x1: fp.x, y1: fp.y, x2: cp.x, y2: cp.y,
+        stroke: color,
+        'stroke-width': times > 1 ? 2 : 1.2,
+        'stroke-opacity': times > 1 ? 0.65 : 0.28,
+        'stroke-linecap': 'round',
+        'stroke-dasharray': len, 'stroke-dashoffset': len
+      });
+      line.appendChild(svgEl('animate', {
+        attributeName: 'stroke-dashoffset', from: len, to: 0,
+        dur: '0.45s', fill: 'freeze'
+      }));
+      chainSvg.appendChild(line);
+    });
+
+    // ── Draw characteristic nodes
+    charNodes.forEach(cn => {
+      const p = charPos.get(cn.id);
+      if (!p) return;
+      const times  = edges.filter(e => e.to === cn.id).length;
+      const color  = charTypeColor(cn.type);
+      const shared = times > 1;
+      const short  = cn.label.length > 11 ? cn.label.slice(0, 9) + '…' : cn.label;
+
+      if (cn.type === 'color') {
+        const r = shared ? 15 : 11;
+        chainSvg.appendChild(svgEl('circle', {
+          cx: p.x, cy: p.y, r,
+          fill: cssColor(cn.label),
+          stroke: shared ? '#e2e8f0' : '#334155',
+          'stroke-width': shared ? 2 : 1, 'stroke-opacity': shared ? 0.7 : 0.4
+        }));
+        if (shared) {
+          const cl = svgEl('text', {
+            x: p.x, y: p.y + r + 10,
+            'text-anchor': 'middle', 'dominant-baseline': 'middle',
+            'font-size': 8, fill: color,
+            'font-family': 'system-ui,sans-serif', 'font-weight': 700
+          });
+          cl.textContent = short;
+          chainSvg.appendChild(cl);
+        }
+      } else {
+        const ph = shared ? 18 : 14;
+        const pw = Math.max(ph * 2, short.length * (shared ? 6 : 5.2) + 14);
+        chainSvg.appendChild(svgEl('rect', {
+          x: p.x - pw / 2, y: p.y - ph / 2, width: pw, height: ph, rx: ph / 2,
+          fill: shared ? color : '#1a2234',
+          'fill-opacity': shared ? 0.22 : 0.9,
+          stroke: color, 'stroke-width': shared ? 1.5 : 0.8,
+          'stroke-opacity': shared ? 0.9 : 0.45
+        }));
+        const nl = svgEl('text', {
+          x: p.x, y: p.y,
+          'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          'font-size': shared ? 9 : 8,
+          fill: shared ? color : '#64748b',
+          'font-family': 'system-ui,sans-serif', 'font-weight': shared ? 700 : 500
+        });
+        nl.textContent = short;
+        chainSvg.appendChild(nl);
+      }
+
+      // Shared count badge
+      if (shared) {
+        const bx = p.x + (cn.type === 'color' ? 13 : Math.max(15, short.length * 3 + 4));
+        const by = p.y - (cn.type === 'color' ? 13 : 7);
+        chainSvg.appendChild(svgEl('circle', { cx: bx, cy: by, r: 6, fill: color }));
+        const bt = svgEl('text', {
+          x: bx, y: by, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          'font-size': 7, fill: '#fff', 'font-family': 'system-ui,sans-serif', 'font-weight': 800
+        });
+        bt.textContent = times;
+        chainSvg.appendChild(bt);
+      }
+    });
+
+    // ── Draw food nodes (top layer)
+    visible.forEach((item, i) => {
+      const { x, y } = foodPos.get(`food_${item.id}`);
+      const food = item.analysis?.foods?.[0];
+
+      const glow = svgEl('circle', {
+        cx: x, cy: y, r: RF + 6,
+        fill: 'none', stroke: '#f97316', 'stroke-width': 1.5, 'stroke-opacity': 0,
+        filter: 'url(#glow)'
+      });
+      glow.appendChild(svgEl('animate', {
+        attributeName: 'stroke-opacity', values: '0;0.5;0', dur: '2s',
+        begin: `${i * 0.2}s`, repeatCount: 'indefinite'
+      }));
+      chainSvg.appendChild(glow);
+
+      chainSvg.appendChild(svgEl('circle', {
+        cx: x, cy: y, r: RF + 2,
+        fill: '#1e293b', stroke: '#f97316', 'stroke-width': 2, 'stroke-opacity': 0.7
+      }));
+
+      chainSvg.appendChild(svgEl('image', {
+        href: item.dataUrl, x: x - RF, y: y - RF,
+        width: RF * 2, height: RF * 2,
+        'clip-path': `url(#cp${i})`,
+        preserveAspectRatio: 'xMidYMid slice'
+      }));
+
+      if (item.status !== 'done') {
+        chainSvg.appendChild(svgEl('circle', {
+          cx: x, cy: y, r: RF,
+          fill: item.status === 'error' ? 'rgba(239,68,68,0.35)' : 'rgba(0,0,0,0.45)'
+        }));
+        const icon = svgEl('text', {
+          x, y, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          'font-size': RF * 0.6, fill: '#fff', opacity: 0.9
+        });
+        icon.textContent = item.status === 'error' ? '⚠' : '⏳';
+        chainSvg.appendChild(icon);
+      }
+
+      chainSvg.appendChild(svgEl('circle', { cx: x + RF - 2, cy: y - RF + 2, r: 10, fill: '#f97316' }));
+      const bt = svgEl('text', {
+        x: x + RF - 2, y: y - RF + 2,
+        'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        'font-size': 9, fill: '#fff', 'font-family': 'system-ui,sans-serif', 'font-weight': 800
+      });
+      bt.textContent = i + 1;
+      chainSvg.appendChild(bt);
+
+      const rawName = food?.name || (item.status === 'analyzing' ? 'Analyzing…' : item.file?.name?.replace(/\.[^.]+$/, '') || '');
+      const name  = rawName.length > 18 ? rawName.slice(0, 16) + '…' : rawName;
+      const lblY  = y + RF + 16;
+      chainSvg.appendChild(svgEl('rect', {
+        x: x - 52, y: lblY - 10, width: 104, height: 20, rx: 4,
+        fill: '#1e293b', 'fill-opacity': 0.9
+      }));
+      const lbl = svgEl('text', {
+        x, y: lblY, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        'font-size': 11, fill: item.status === 'error' ? '#fca5a5' : '#f1f5f9',
+        'font-family': 'system-ui,sans-serif', 'font-weight': 700
+      });
+      lbl.textContent = name;
+      chainSvg.appendChild(lbl);
+    });
+  }
+
+  // ── Bar chart ─────────────────────────────────────────────────
+  function updateBarChart(done) {
+    const section = document.getElementById('chartSection');
+    const svg     = document.getElementById('barChartSvg');
+    if (!done.length) { section.style.display = 'none'; return; }
+
+    section.style.display = 'flex';
+    svg.innerHTML = '';
+
+    // Aggregate category_pct (average across all done items)
+    const totals = { noodles: 0, rice: 0, meat: 0, bread: 0, fish: 0, vegetables: 0, other: 0 };
+    let n = 0;
+    done.forEach(item => {
+      const pct = item.analysis?.category_pct;
+      if (!pct) return;
+      n++;
+      Object.keys(totals).forEach(k => { totals[k] += (pct[k] || 0); });
+    });
+    if (!n) return;
+    Object.keys(totals).forEach(k => { totals[k] = Math.round(totals[k] / n); });
+
+    const entries = Object.entries(totals).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+    if (!entries.length) return;
+
+    // Cuisine counts
+    const cuisines = {};
+    done.forEach(item => {
+      const c = item.analysis?.foods?.[0]?.cuisine;
+      if (c) cuisines[c] = (cuisines[c] || 0) + 1;
+    });
+    const cuisineList = Object.entries(cuisines).sort(([, a], [, b]) => b - a);
+
+    const W = svg.getBoundingClientRect().width  || section.getBoundingClientRect().width - 50 || 400;
+    const H = svg.getBoundingClientRect().height || 110;
+
+    const halfW = cuisineList.length ? W * 0.58 : W;
+    const LBL_W = 84, VAL_W = 30;
+    const BAR_W = halfW - LBL_W - VAL_W - 8;
+    const rowH  = Math.min(18, H / Math.max(entries.length, 1));
+
+    entries.forEach(([cat, val], i) => {
+      const c = CAT[cat] || CAT.other;
+      const y = i * rowH + rowH / 2;
+
+      const lbl = svgEl('text', {
+        x: LBL_W - 4, y, 'text-anchor': 'end', 'dominant-baseline': 'middle',
+        'font-size': 9, fill: '#64748b', 'font-family': 'system-ui,sans-serif'
+      });
+      lbl.textContent = `${c.emoji} ${cat}`;
+      svg.appendChild(lbl);
+
+      svg.appendChild(svgEl('rect', {
+        x: LBL_W, y: y - rowH * 0.3, width: BAR_W, height: rowH * 0.6, rx: 3, fill: '#0f1117'
+      }));
+
+      const fill = svgEl('rect', {
+        x: LBL_W, y: y - rowH * 0.3, width: 0, height: rowH * 0.6, rx: 3, fill: c.solid
+      });
+      fill.appendChild(svgEl('animate', {
+        attributeName: 'width', from: 0, to: Math.round(val * BAR_W / 100),
+        dur: `${0.35 + i * 0.07}s`, fill: 'freeze'
+      }));
+      svg.appendChild(fill);
+
+      const vt = svgEl('text', {
+        x: LBL_W + BAR_W + 5, y, 'dominant-baseline': 'middle',
+        'font-size': 9, fill: '#475569', 'font-family': 'system-ui,sans-serif'
+      });
+      vt.textContent = `${val}%`;
+      svg.appendChild(vt);
+    });
+
+    // Cuisine chips (right column)
+    if (cuisineList.length) {
+      const chipX = halfW + 12;
+      const secLbl = svgEl('text', {
+        x: chipX, y: 9, 'font-size': 8, fill: '#334155',
+        'font-family': 'system-ui,sans-serif', 'font-weight': 700
+      });
+      secLbl.textContent = 'CUISINE';
+      svg.appendChild(secLbl);
+
+      cuisineList.forEach(([cuisine, count], i) => {
+        const cy   = 22 + i * 19;
+        if (cy > H - 6) return;
+        const short = cuisine.length > 15 ? cuisine.slice(0, 13) + '…' : cuisine;
+        const pw    = Math.min(W - chipX - 8, short.length * 6 + 18);
+        svg.appendChild(svgEl('rect', {
+          x: chipX, y: cy - 7, width: pw, height: 14, rx: 7,
+          fill: '#1e293b', stroke: '#a855f7', 'stroke-width': 0.8, 'stroke-opacity': 0.6
+        }));
+        const ct = svgEl('text', {
+          x: chipX + pw / 2, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          'font-size': 8.5, fill: '#a855f7', 'font-family': 'system-ui,sans-serif', 'font-weight': 600
+        });
+        ct.textContent = count > 1 ? `${short} ×${count}` : short;
+        svg.appendChild(ct);
+      });
+    }
+  }
+
+  // ── ZIP download ─────────────────────────────────────────────
+  document.getElementById('zipBtn').addEventListener('click', downloadZip);
+
+  async function downloadZip() {
+    const done = foods.filter(f => f.dataUrl);
+    if (!done.length) return;
+
+    const btn = document.getElementById('zipBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spin">⏳</span>';
+
+    const zip  = new JSZip();
+    const imgs = zip.folder('images');
+
+    // Add each image + its analysis
+    done.forEach((item, i) => {
+      const food  = item.analysis?.foods?.[0];
+      const name  = (food?.name || `food-${i + 1}`)
+        .replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 40);
+      const label = `${String(i + 1).padStart(2, '0')}-${name}`;
+
+      // Image file (base64 → binary)
+      const b64 = item.dataUrl.split(',')[1];
+      imgs.file(`${label}.jpg`, b64, { base64: true });
+
+      // Per-image analysis JSON
+      if (item.analysis) {
+        imgs.file(`${label}.json`, JSON.stringify(item.analysis, null, 2));
+      }
+    });
+
+    // Summary JSON with all foods
+    const summary = {
+      exported: new Date().toISOString(),
+      count: done.length,
+      foods: done.map((item, i) => ({
+        index: i + 1,
+        file: item.file?.name || null,
+        analysis: item.analysis
+      }))
+    };
+    zip.file('summary.json', JSON.stringify(summary, null, 2));
+
+    // Generate and download
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.download = `food-chain-${new Date().toISOString().slice(0,10)}.zip`;
+    a.href = url;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    btn.disabled = false;
+    btn.innerHTML = '🗜️';
+  }
+
+  // ── Screenshot capture ───────────────────────────────────────
+  document.getElementById('screenshotBtn').addEventListener('click', captureRightPanel);
+
+  async function captureRightPanel() {
+    const panel    = document.querySelector('.panel-right');
+    const panelRect = panel.getBoundingClientRect();
+    const DPR = window.devicePixelRatio || 1;
+    const W   = panel.offsetWidth;
+    const H   = panel.offsetHeight;
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = W * DPR;
+    canvas.height = H * DPR;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(DPR, DPR);
+
+    // Background
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(0, 0, W, H);
+
+    // Helper: serialize an SVG element and draw it at (x, y).
+    // Strips <animate> elements and bakes their final `to` value into the
+    // parent so lines and bars are fully visible in the static export.
+    const drawSvg = (el, x, y) => new Promise((res, rej) => {
+      const w = el.clientWidth  || el.getBoundingClientRect().width;
+      const h = el.clientHeight || el.getBoundingClientRect().height;
+      if (!w || !h) { res(); return; }
+      const clone = el.cloneNode(true);
+      clone.setAttribute('width', w);
+      clone.setAttribute('height', h);
+
+      // Bake final animation values, then remove <animate> nodes
+      clone.querySelectorAll('animate').forEach(anim => {
+        const attr = anim.getAttribute('attributeName');
+        const to   = anim.getAttribute('to');
+        if (attr && to != null) anim.parentElement.setAttribute(attr, to);
+        anim.remove();
+      });
+
+      const svg = new XMLSerializer().serializeToString(clone);
+      const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, x, y, w, h); res(); };
+      img.onerror = rej;
+      img.src = url;
+    });
+
+    // Topbar strip
+    const topbar = document.querySelector('.chain-topbar');
+    const tbH = topbar.offsetHeight;
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0, 0, W, tbH);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, tbH - 1, W, 1);
+    const hint = document.getElementById('chainHint').textContent;
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(hint, 18, tbH / 2 + 4);
+
+    // Graph SVG
+    const chainSvgEl = document.getElementById('chainSvg');
+    const chainRect  = chainSvgEl.getBoundingClientRect();
+    await drawSvg(chainSvgEl, 0, chainRect.top - panelRect.top);
+
+    // Chart section (if visible)
+    const chartSection = document.getElementById('chartSection');
+    if (chartSection.style.display !== 'none') {
+      const csRect = chartSection.getBoundingClientRect();
+      const csY    = csRect.top - panelRect.top;
+      ctx.fillStyle = '#0f1117';
+      ctx.fillRect(0, csY, W, chartSection.offsetHeight);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, csY, W, 1);
+      ctx.font = '700 9px system-ui, sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.fillText('OVERALL FOOD BREAKDOWN', 20, csY + 16);
+      const barEl   = document.getElementById('barChartSvg');
+      const barRect = barEl.getBoundingClientRect();
+      await drawSvg(barEl, barRect.left - panelRect.left, barRect.top - panelRect.top);
+    }
+
+    // Download
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.download = `food-graph-${new Date().toISOString().slice(0,19).replace(/[T:]/g,'-')}.png`;
+      a.href = url;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, 'image/png');
+  }
+
+  // Redraw on resize (handles mobile/desktop layout switch)
+  const ro = new ResizeObserver(() => updateChain());
+  ro.observe(chainSvg);
+  window.addEventListener('resize', () => updateChain());
+</script>
+</body>
+</html>
